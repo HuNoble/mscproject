@@ -1,0 +1,21 @@
+    - name: Init per-host link list
+      set_fact:
+        local_links: []
+      tags: configit
+    
+    - name: Fill per-host link list
+      set_fact:
+        local_links: "{{ local_links + [item] }}"
+        is_leaf: "{{ true if item.leaf_node == inventory_hostname else omit}}"
+        is_spine: "{{ true if item.spine_node == inventory_hostname else omit}}"
+      when: item.leaf_node == inventory_hostname or item.spine_node == inventory_hostname
+      with_items:
+        - "{{ links }}"
+      tags: configit
+
+    - name: Fill per-host address list
+      set_fact:
+        local_addresses: "{{ item }}"
+      when: item.node == inventory_hostname
+      with_items:
+        - "{{ addresses }}"

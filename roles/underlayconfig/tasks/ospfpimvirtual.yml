@@ -1,0 +1,114 @@
+    - name: Bring up loopback0 interface as it's needed on all hosts
+      nxos_interface:
+        admin_state: up
+        name: Loopback0
+        state: "{{ global_state }}"
+        
+    - name: Configure loopback0 address
+      nxos_l3_interface:
+        name: loopback0
+        ipv4: "{{local_addresses.loopback_internal }}/32"
+        state: "{{ global_state }}"
+
+    - name: Create OSPF instance
+      nxos_ospf:
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+
+    - name: Set router ID for OSPF instance
+      nxos_ospf_vrf:
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        router_id: "{{ local_addresses.loopback_internal }}"
+
+    - name: Add loopback0 to OSPF
+      nxos_interface_ospf:
+        area: 0
+        interface: loopback0
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        
+    - name: Put loopback0 to PIM sparse mode
+      nxos_pim_interface:
+        interface: loopback0
+        sparse: yes
+        state: "{{ global_state }}"
+        
+    - name: Bring up loopback1 interface on selected spines
+      nxos_interface:
+        admin_state: up
+        name: Loopback1
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+    
+    - name: Configure loopback1 on selected spines
+      nxos_l3_interface:
+        name: loopback1
+        ipv4: "{{ rp_anycast_address }}/32"
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+
+    - name: Add loopback1 to OSPF
+      nxos_interface_ospf:
+        area: 0
+        interface: loopback1
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+
+    - name: Put loopback1 to PIM sparse mode
+      nxos_pim_interface:
+        interface: loopback1
+        sparse: yes
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+
+    - name: Assign PIM anycast-rp address
+      nxos_config:
+        lines: "ip pim anycast-rp {{ rp_anycast_address }} {{item.loopback_internal}}"
+      when: global_state == "present" and local_addresses.is_rp is defined and local_addresses.is_rp == true and item.is_rp is defined and item.is_rp == true
+      with_items:
+        - "{{ addresses }}"
+
+    - name: Configure PIM rp address
+      nxos_pim_rp_address:
+        rp_address: "{{ rp_anycast_address }}"
+        state: "{{ global_state }}"
+        
+    - name: Bring up loopback2 interface on leaves
+      nxos_interface:
+        admin_state: up
+        name: Loopback2
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+
+    - name: Configure loopback2 address on leaves
+      nxos_l3_interface:
+        name: loopback2
+        ipv4: "{{local_addresses.loopback_vtep }}/32"
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+      
+    - name: Configure secondary IP on loopback2
+      nxos_l3_interface:
+        name: loopback2
+        ipv4: "{{ item.loopback_vip }}/32 secondary"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Put loopback1 to PIM sparse mode
+      nxos_pim_interface:
+        interface: loopback2
+        sparse: yes
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+
+    - name: Add loopback2 to OSPF
+      nxos_interface_ospf:
+        area: 0
+        interface: loopback2
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true

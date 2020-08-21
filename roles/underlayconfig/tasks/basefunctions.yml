@@ -1,0 +1,53 @@
+    - name: Set NV Overlay EVPN
+      nxos_evpn_global:
+        nv_overlay_evpn: true
+        
+    - name: Activate OSPF feature
+      nxos_feature:
+        feature: ospf
+        state: enabled
+        
+    - name: Activate BGP feature
+      nxos_feature:
+        feature: bgp
+        state: enabled
+        
+    - name: Activate LACP feature
+      nxos_feature:
+        feature: lacp
+        state: enabled
+        
+    - name: Activate NV overlay feature
+      nxos_feature:
+        feature: "nv overlay"
+        state: enabled
+     
+    - name: Activate PIM feature
+      nxos_feature:
+        feature: pim
+        state: enabled
+    
+    - name: Activate interface-vlan feature
+      nxos_feature:
+        feature: interface-vlan
+        state: enabled
+    
+    - name: Activate vnseg_vlan feature
+      nxos_feature:
+        feature: vnseg_vlan
+        state: enabled
+        
+    - name: Activate vpc feature
+      nxos_feature:
+        feature: vpc
+        state: enabled
+        
+    - name: Configure fabric forward anycast gateway MAC address
+      nxos_overlay_global:
+        anycast_gateway_mac: "{{ fabric_forward_anycast_gateway_mac }}"
+        
+    - name: Configure hostname
+      nxos_system:
+        hostname: "{{ inventory_hostname }}"
+        state: "{{ global_state }}"
+    

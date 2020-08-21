@@ -1,0 +1,59 @@
+---
+- name: Collect NX-OS facts
+  nxos_facts:
+    gather_subset:
+      - legacy
+  register: myfacts
+
+- name: Initialize the interfaces array
+  set_fact:
+    interfaces: []
+  when: item.1.switch == inventory_hostname or (item.1.vpc_pair is defined and item.1.vpc_pair == inventory_hostname)
+  with_subelements:
+    - "{{ tenants | selectattr('attach', 'defined') | list }}"
+    - attach
+
+- name: Fill the interfaces array (interface)
+  set_fact:
+    interfaces: "{{ interfaces + item.1.interface }}"
+  when: item.1.switch == inventory_hostname and "{{'port-channel' + (item.1.portchannel|default(131313)|string) }}" not in myfacts.ansible_facts.ansible_net_interfaces_list
+  with_subelements:
+    - "{{ tenants | selectattr('attach', 'defined') | list }}"
+    - attach
+
+- name: Fill the interfaces array (vpc_interface)
+  set_fact:
+    interfaces: "{{ interfaces + item.1.vpc_interface }}" 
+  when: item.1.vpc_interface is defined and (item.1.vpc_pair is defined and item.1.vpc_pair == inventory_hostname) and "{{'port-channel' + (item.1.portchannel|default(131313)|string) }}" not in myfacts.ansible_facts.ansible_net_interfaces_list
+  with_subelements:
+    - "{{ tenants | selectattr('attach', 'defined') | list }}"
+    - attach
+
+- name: Fill the interfaces array (portchannel)
+  set_fact:
+    interfaces: "{{ interfaces + ['port-channel' + (item.1.portchannel|string)] }}" 
+  when: item.1.portchannel is defined and (item.1.switch == inventory_hostname or (item.1.vpc_pair is defined and item.1.vpc_pair == inventory_hostname))
+  with_subelements:
+    - "{{ tenants | selectattr('attach', 'defined') | list }}"
+    - attach
+
+- name: Make the content of the interfaces array unique
+  set_fact:
+    interfaces: "{{ interfaces | unique }}"
+  when: interfaces is defined
+    
+- name: Create base array tenant
+  set_fact:
+    tenant: []
+  when: item.1.switch == inventory_hostname or (item.1.vpc_pair is defined and item.1.vpc_pair == inventory_hostname)
+  with_subelements:
+    - "{{ tenants | selectattr('attach', 'defined') | list }}"
+    - attach
+
+- name: Level IP address with the other variables
+  set_fact:
+    tenant: "{{tenant + [item.0|combine( {'ip_address' : item.1.ip_address } ) ] }}"
+  when: tenant is defined and (item.0.switch == inventory_hostname or (item.0.vpc_pair is defined and item.0.vpc_pair == inventory_hostname))
+  with_together:
+    - "{{ tenants | map(attribute='attach') | list | sum(start=[]) }}"
+    - "{{ tenants }}"

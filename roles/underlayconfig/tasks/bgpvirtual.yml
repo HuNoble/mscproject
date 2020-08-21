@@ -1,0 +1,58 @@
+    - name: Create BGP AS
+      nxos_bgp:
+        asn: "{{ bgp_asn }}"
+        state: "{{ global_state }}"
+        router_id: "{{ local_addresses.loopback_internal }}"
+
+    - name: BGP neighbor configuration (spine)
+      nxos_bgp_neighbor:
+        asn: "{{ bgp_asn }}"
+        update_source: loopback0
+        state: "{{ global_state }}"
+        remote_as: "{{ bgp_asn }}"
+        neighbor: "{{ rid_agg_network }}"
+      when: is_spine is defined and is_spine == true
+
+    - name: BGP neighbor AF configuration (spine)
+      nxos_bgp_neighbor_af:
+        asn: "{{ bgp_asn }}"
+        afi: l2vpn
+        safi: evpn
+        neighbor: "{{ rid_agg_network }}"
+        send_community: both
+        state: "{{ global_state }}"
+        route_reflector_client: yes
+      when: is_spine is defined and is_spine == true
+
+    - name: BGP neighbor configuration (leaf)
+      nxos_bgp_neighbor:
+        asn: "{{ bgp_asn }}"
+        update_source: loopback0
+        state: "{{ global_state }}"
+        remote_as: "{{ bgp_asn }}"
+        neighbor: "{{ item.loopback_internal }}" #spine loopback0
+      when: is_leaf is defined and is_leaf == true and item.node is search("spine")
+      with_items:
+        - "{{ addresses }}"
+
+    - name: BGP neighbor AF configuration (leaf)
+      nxos_bgp_neighbor_af:
+        asn: "{{ bgp_asn }}"
+        afi: l2vpn
+        safi: evpn
+        neighbor: "{{ item.loopback_internal }}"
+        send_community: both
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true and item.node is search("spine")
+      with_items:
+        - "{{ addresses }}"
+    
+    - name: NVE infra-vlans
+      nxos_config:
+        parents: 
+          - "router bgp {{ bgp_asn }}"
+          - address-family l2vpn evpn
+        lines: 
+          - advertise-pip
+      when: global_state == "present" and is_leaf is defined and is_leaf == true
+ 

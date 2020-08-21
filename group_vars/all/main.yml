@@ -1,0 +1,6 @@
+ansible_connection: network_cli
+ansible_network_os: nxos
+ansible_user: abeszabo
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+#ansible_become: yes
+#ansible_become_method: enable

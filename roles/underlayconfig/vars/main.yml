@@ -1,0 +1,28 @@
+links:
+  - {leaf_node: leaf1, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet1/51, link_subnet: 172.17.4.8}
+  - {leaf_node: leaf2, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet1/52, link_subnet: 172.17.4.4}
+  - {leaf_node: border_leaf1, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet2/52, link_subnet: 172.17.4.16}
+  - {leaf_node: border_leaf2, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet2/51, link_subnet: 172.17.4.12}
+  - {leaf_node: leaf1, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet1/49, link_subnet: 172.17.4.20}
+  - {leaf_node: leaf2, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet1/50, link_subnet: 172.17.4.24}
+  - {leaf_node: border_leaf1, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet2/50, link_subnet: 172.17.4.28}
+  - {leaf_node: border_leaf2, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet2/49, link_subnet: 172.17.4.32}
+addresses:
+  - {node: leaf1, loopback_internal: 172.18.0.3, loopback_vtep: 172.18.1.4}
+  - {node: leaf2, loopback_internal: 172.17.0.4, loopback_vtep: 172.18.1.6}
+  - {node: border_leaf1, loopback_internal: 172.18.0.1, loopback_vtep: 172.18.1.1}
+  - {node: border_leaf2, loopback_internal: 172.18.0.2, loopback_vtep: 172.18.1.3}
+  - {node: spine1, loopback_internal: 172.18.0.5, loopback_rp: 172.18.0.5, is_rp: true}
+  - {node: spine2, loopback_internal: 172.18.0.6, loopback_rp: 172.18.0.5, is_rp: true}
+portchannels:
+  - {node1: leaf1, ip_address1: 192.168.11.82, interfaces1: [Ethernet1/45, Ethernet1/46],
+     node2: leaf2, ip_address2: 192.168.11.83, interfaces2: [Ethernet1/45, Ethernet1/46],
+     portchannel: 501, vpc_id: 100, vlan_id: 1313, vlan_subnet: 172.17.4.36, loopback_vip: 172.18.1.5}  
+  - {node1: border_leaf1, ip_address1: 192.168.11.80, interfaces1: [Ethernet1/47, Ethernet1/48],
+     node2: border_leaf2, ip_address2: 192.168.11.81, interfaces2: [Ethernet1/47, Ethernet1/48],
+     portchannel: 501, vpc_id: 100, vlan_id: 1313, vlan_subnet: 172.17.4.42, loopback_vip: 172.18.1.2}    
+rp_anycast_address: 172.18.2.1
+bgp_asn: 65100
+rid_agg_network: 172.18.0.0/24
+fabric_forward_anycast_gateway_mac: "EEEE.EEEE.EEEE"
+global_state: "present"

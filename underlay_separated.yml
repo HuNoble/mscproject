@@ -1,0 +1,6 @@
+---
+- name: Build the underlay
+  hosts: underlay
+  gather_facts: false
+  roles:
+    - underlayconfig

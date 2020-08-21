@@ -1,0 +1,91 @@
+---
+- name: Ensure lacp is enabled
+  nxos_feature:
+    feature: lacp
+    state: enabled
+  when: tenant is defined
+      
+- name: Ensure vpc is enabled
+  nxos_feature:
+    feature: vpc
+    state: enabled
+  when: tenant is defined
+      
+- name: create link aggregation group
+  nxos_linkagg:
+    group: "{{ item.portchannel }}"
+    state: "{{ global_state }}"
+    mode: active
+  when: item.portchannel is defined
+  with_items:
+      - "{{ tenant }}"
+      
+- name: Put ALL interfaces to L2 mode (first eth interfaces then portchannel)
+  nxos_interface:
+    name: '{{ item }}'
+    mode: layer2
+    state: "{{ global_state }}"
+  when: interfaces is defined
+  with_items:
+    - "{{ interfaces }}"
+  
+- name: Set MTU (first eth interfaces then portchannel)
+  nxos_config:
+    lines: mtu 9216
+    parents: '{{"interface "+ item}}'
+  when: interfaces is defined and global_state == "present"
+  with_items:
+    - "{{ interfaces }}"
+  
+- name: Configure L2 interfaces and bind them to VLAN-s (interface)
+  nxos_l2_interface:
+    name: '{{ item.1 }}'
+    access_vlan: '{{ item.0.vlan_id if (item.0.mode | default(default_tenants_attach_mode)) == "access" else omit }}'
+    trunk_allowed_vlans: '{{ item.0.vlan_id if ((item.0.mode | default(default_tenants_attach_mode)) == "trunk" and item.0.portchannel is defined) else omit}}'
+    trunk_vlans: '{{ item.0.vlan_id if ((item.0.mode | default(default_tenants_attach_mode)) == "trunk" and item.0.portchannel is not defined) else omit}}'
+    mode: '{{ item.0.mode | default(default_tenants_attach_mode) }}'
+    state: '{{ global_state }}'
+  when: tenant is defined and item.0.switch == inventory_hostname and  "{{'port-channel' + (item.0.portchannel|default(131313)|string) }}" not in myfacts.ansible_facts.ansible_net_interfaces_list
+  loop: "{{ tenant|subelements('interface') }}"
+  
+- name: Configure L2 interfaces and bind them to VLAN-s (vpc_pair)
+  nxos_l2_interface:
+    name: '{{ item.1 }}'
+    access_vlan: '{{ item.0.vlan_id if (item.0.mode | default(default_tenants_attach_mode)) == "access" else omit }}'
+    trunk_allowed_vlans: '{{ item.0.vlan_id if ((item.0.mode | default(default_tenants_attach_mode)) == "trunk" and item.0.portchannel is defined) else omit}}'
+    trunk_vlans: '{{ item.0.vlan_id if ((item.0.mode | default(default_tenants_attach_mode)) == "trunk" and item.0.portchannel is not defined) else omit}}'
+    mode: '{{ item.0.mode | default(default_tenants_attach_mode) }}'
+    state: "{{ global_state }}"
+  when: tenant is defined and item.0.vpc_pair == inventory_hostname and "{{'port-channel' + (item.0.portchannel|default(131313)|string) }}" not in myfacts.ansible_facts.ansible_net_interfaces_list
+  loop: "{{ tenant|subelements('vpc_interface', { 'skip_missing': true })}}"
+  
+- name: Configure L2 interfaces and bind them to VLAN-s (portchannel)
+  nxos_l2_interface:
+    name: "{{'port-channel' + (item.portchannel|string) }}"
+    access_vlan: '{{ item.vlan_id if (item.mode | default(default_tenants_attach_mode)) == "access" else omit }}'
+    trunk_allowed_vlans: '{{ item.vlan_id if ((item.mode | default(default_tenants_attach_mode)) == "trunk" and  "port-channel" + (item.portchannel|default(131313)|string) not in myfacts.ansible_facts.ansible_net_interfaces_list) else omit}}'
+    trunk_vlans: '{{ item.vlan_id if ((item.mode | default(default_tenants_attach_mode)) == "trunk" and  "port-channel" + (item.portchannel|default(131313)|string) in myfacts.ansible_facts.ansible_net_interfaces_list) else omit}}'
+    mode: '{{ item.mode | default(default_tenants_attach_mode) }}'
+    state: "{{ global_state }}"
+  when: tenant is defined and item.portchannel is defined
+  with_items:
+      - "{{ tenant }}"
+  
+- name: create link aggregation group
+  nxos_linkagg:
+    group: "{{ item.portchannel }}"
+    state: "{{ global_state }}"
+    mode: active
+    members: '{{item.interface if item.switch == inventory_hostname else item.vpc_interface }}'
+  when: item.portchannel is defined and  "{{'port-channel' + (item.portchannel|default(131313)|string) }}" not in myfacts.ansible_facts.ansible_net_interfaces_list
+  with_items:
+      - "{{ tenant }}"
+    
+- name: Assign vPC to portchannel
+  nxos_vpc_interface:
+    portchannel: "{{ item.portchannel }}"
+    state: "{{ global_state }}"
+    vpc: "{{ item.vpc_id }}"
+  when: item.portchannel is defined and  "{{'port-channel' + (item.portchannel|default(131313)|string) }}" not in myfacts.ansible_facts.ansible_net_interfaces_list
+  with_items:
+      - "{{ tenant }}"

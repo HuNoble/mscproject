@@ -1,0 +1,34 @@
+- name: Create VLAN and associate VNI with it
+  nxos_vlan:
+    mapped_vni: "{{ vrf_vni }}"
+    vlan_id: "{{ vrf_vlan_id }}"
+    state: "{{ global_state }}"
+  when: tenant is defined
+     
+- name: Create interface for VRF
+  nxos_interface:
+    name: Vlan"{{ vrf_vlan_id }}"
+    mtu: 9192
+    state: "{{ global_state }}"
+  when: tenant is defined
+     
+- name: Create VRF membership
+  nxos_vrf_interface:
+    interface: "Vlan{{ vrf_vlan_id }}"
+    vrf: "{{ vrf_name }}"
+    state: "{{ global_state }}"
+  when: tenant is defined
+  
+- name: Enable ip forward on VRF VLAN interface after creating membership
+  nxos_interface:
+    name: Vlan"{{ vrf_vlan_id }}"
+    ip_forward: enable
+    state: "{{ global_state }}"
+  when: tenant is defined
+
+- name: Add no ip redirects to config
+  nxos_config:
+    parents: "interface Vlan{{ vrf_vlan_id }}"
+    lines: 
+      - no ip redirects
+  when: global_state == "present" and tenant is defined

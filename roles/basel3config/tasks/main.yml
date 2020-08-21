@@ -1,0 +1,17 @@
+---
+- import_tasks: getvariables.yml
+  tags: always
+- import_tasks: setupvrf.yml
+  tags: setup_vrf
+- import_tasks: configurenve.yml
+  tags: configure_nve
+- import_tasks: setupbgp.yml
+  tags: setup_bgp
+- import_tasks: createvlaninterface.yml
+  tags: create_vlan_interface
+- import_tasks: createroutemap.yml
+  tags: create_route_map
+- import_tasks: createportchannel.yml
+  tags: create_portchannel
+- import_tasks: tenantvlans.yml
+  tags: tenant_vlans

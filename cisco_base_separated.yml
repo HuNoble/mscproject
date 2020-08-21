@@ -1,0 +1,6 @@
+---
+- name: Build a L2 service
+  hosts: leaves
+  gather_facts: false
+  roles:
+    - baseconfig

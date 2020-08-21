@@ -1,0 +1,11 @@
+---
+- name: create VLAN-s, bind VNI-s
+  nxos_vlan:
+    vlan_id: '{{ item.1.vlan_id }}'
+    name: '{{ item.1.vlan_name | default(omit) }}'
+    mapped_vni: '{{ item.0.vni }}'
+    state: '{{ global_state }}'
+  when: tenant is defined
+  with_subelements:
+    - "{{ networks }}"
+    - attach

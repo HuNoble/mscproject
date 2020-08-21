@@ -1,0 +1,39 @@
+---
+vrf_vlan_id: 2001
+vrf_vni: 50001
+vrf_name: VRF-A
+bgp_asn: 65100
+vrf_route_map_name: TAG
+vrf_ip_tag: 21921
+global_state: present
+tenants:
+  - ip_address: 192.168.153.1
+    attach:
+      - switch: leaf1
+        vlan_id: 2300
+        interface: 
+          - Ethernet1/3
+        mode: trunk
+        vpc_pair: leaf2
+        vpc_interface: 
+          - Ethernet1/3
+        vpc_id: 101
+        portchannel: 13         
+  - ip_address: 192.168.152.1
+    attach:
+      - switch: leaf1
+        vlan_id: 2301
+        interface: 
+          - Ethernet1/2
+  - ip_address: 192.168.154.1
+    attach:
+      - switch: border_leaf1
+        vlan_id: 2300
+        interface: 
+          - Ethernet1/1
+        mode: trunk
+        vpc_pair: border_leaf2
+        vpc_interface: 
+          - Ethernet1/1
+        vpc_id: 101
+        portchannel: 13

@@ -1,0 +1,11 @@
+---
+  - import_tasks: getvariables.yml
+    tags: always
+  - import_tasks: createvnis.yml
+    tags: create_vnis
+  - import_tasks: createvlans.yml
+    tags: create_vlans
+  - import_tasks: bindvnivtep.yml
+    tags: bind_vni_vtep
+  - import_tasks: createportchannel.yml
+    tags: create_portchannel

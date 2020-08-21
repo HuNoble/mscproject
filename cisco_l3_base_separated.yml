@@ -1,0 +1,6 @@
+---
+- name: Build an L3 service
+  hosts: leaves
+  gather_facts: false
+  roles:
+    - basel3config

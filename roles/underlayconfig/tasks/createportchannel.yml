@@ -1,0 +1,135 @@
+    - name: Bring up interfaces which partkae in portchannels
+      nxos_interface:
+        admin_state: up
+        name: "{{item.interfaces1 if inventory_hostname == item.node1 else item.interfaces2}}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Create link aggregation between leaves
+      nxos_linkagg:
+        group: "{{ item.portchannel }}"
+        state: "{{ global_state }}"
+        mode: active
+        members: "{{item.interfaces1 if inventory_hostname == item.node1 else item.interfaces2}}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+      
+    - name: Create vPC and set global configuration
+      nxos_vpc:
+        domain: "{{item.vpc_id}}"
+        pkl_dest: "{{ item.ip_address2 if inventory_hostname == item.node1 else item.ip_address1 }}"
+        pkl_src: "{{ item.ip_address1 if inventory_hostname == item.node1 else item.ip_address2 }}"
+        peer_gw: true
+        state: "{{ global_state }}"
+        auto_recovery: true
+        delay_restore: 150
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Additional config for vPC domain
+      nxos_config:
+        parents: "vpc domain {{ item.vpc_id }}"
+        lines: 
+          - auto-recovery reload-delay 360
+          - ip arp synchronize
+          - ipv6 nd synchronize
+          - peer-switch
+      when: global_state == "present" and inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Put portchannel interfaces to L2 mode
+      nxos_interface:
+        name: "{{'port-channel' + (item.portchannel|string) }}"
+        mode: layer2
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Put portchannel interfaces to trunk mode
+      nxos_l2_interface:
+        mode: trunk
+        name: "{{'port-channel' + (item.portchannel|string) }}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+
+    - name: Create vPC interface config
+      nxos_vpc_interface:
+        peer_link: yes
+        portchannel: "{{ item.portchannel }}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Create VLAN for interfaces in vPC
+      nxos_vlan:
+        vlan_id: "{{ item.vlan_id }}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Create interface for backup VLAN
+      nxos_interface:
+        name: Vlan"{{ item.vlan_id }}"
+        mtu: 9216
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Add no ip redirects to VLAN interface
+      nxos_config:
+        parents: "interface Vlan{{ item.vlan_id }}"
+        lines: 
+          - no ip redirects
+          - no ipv6 redirects
+      when: global_state == "present" and inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: VLAN interface L3 configuration
+      nxos_l3_interface:
+        name: Vlan"{{ item.vlan_id }}"
+        ipv4: "{{item.vlan_subnet | ipmath(1) if inventory_hostname == item.node1 else item.vlan_subnet | ipmath(2) }}/30"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+
+    - name: VLAN interface OSPF configuration
+      nxos_interface_ospf:
+        area: 0
+        interface: "Vlan{{ item.vlan_id }}"
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        network: point-to-point
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+
+    - name: VLAN interface PIM configuration
+      nxos_pim_interface:
+        interface: "Vlan{{ item.vlan_id }}"
+        sparse: yes
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: NVE infra-vlans
+      nxos_config:
+        lines: 
+          - "system nve infra-vlans {{ item.vlan_id }}"
+      when: global_state == "present" and inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        

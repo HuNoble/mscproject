@@ -1,0 +1,23 @@
+    - name: Configure NVE interface
+      nxos_vxlan_vtep:
+        interface: nve1
+        source_interface: loopback2
+        host_reachability: yes
+        shutdown: yes
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+      
+    - name: NVE advertise virtual rmac
+      nxos_config:
+        parents: interface nve1
+        lines: 
+          - advertise virtual-rmac
+      when: global_state == "present" and is_leaf is defined and is_leaf == true
+      
+    - name: Configure NVE interface
+      nxos_vxlan_vtep:
+        interface: nve1
+        shutdown: no
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+  

@@ -1,0 +1,40 @@
+---
+
+- name: Create tenant Vlan interface
+  nxos_interface:
+    name: "Vlan{{ item.vlan_id }}"
+    state: "{{ global_state }}"
+  when: tenant is defined
+  with_items:
+      - "{{ tenant }}"
+    
+- name: Create VRF membership for tenant VLAN-s
+  nxos_vrf_interface:
+    interface: "Vlan{{ item.vlan_id }}"
+    vrf: "{{ vrf_name }}"
+    state: "{{ global_state }}"
+  when: tenant is defined
+  with_items:
+      - "{{ tenant }}"
+      
+- name: Configure tenant Vlan interface after VRF membership
+  nxos_interface:
+    name: "Vlan{{ item.vlan_id }}"
+    mtu: 9192
+    fabric_forwarding_anycast_gateway: true
+    state: "{{ global_state }}"
+  when: tenant is defined
+  with_items:
+      - "{{ tenant }}"
+      
+- name: IP config of tenant Vlan interfaces
+  nxos_ip_interface:
+    interface: "Vlan{{ item.vlan_id }}"
+    addr: "{{item.ip_address }}"
+    mask: 24
+    tag: "{{ vrf_ip_tag }}"
+    state: "{{ global_state }}"
+  when: tenant is defined
+  with_items:
+      - "{{ tenant }}"
+    

@@ -1,0 +1,10 @@
+- name: Create route-map
+  nxos_config:
+    lines: "route-map {{ vrf_route_map_name }} permit 10"
+  when: global_state == "present" and tenant is defined
+    
+- name: Create allow rule to route-map
+  nxos_config:
+    parents: "route-map {{ vrf_route_map_name }} permit 10"
+    lines: "match tag {{ vrf_ip_tag }}"
+  when: global_state == "present" and tenant is defined

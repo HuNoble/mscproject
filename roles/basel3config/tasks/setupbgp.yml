@@ -1,0 +1,17 @@
+- name: Create BGP AS, add VRF to it
+  nxos_bgp:
+    asn: "{{ bgp_asn }}"
+    vrf: "{{ vrf_name }}"
+    state: "{{ global_state }}"
+  when: tenant is defined
+  
+- name: BGP AF settings
+  nxos_bgp_af:
+    asn: "{{ bgp_asn }}"
+    afi: ipv4
+    safi: unicast
+    advertise_l2vpn_evpn: true
+    redistribute: [['direct','{{ vrf_route_map_name }}']]
+    state: "{{ global_state }}"
+    vrf: "{{ vrf_name }}"
+  when: tenant is defined

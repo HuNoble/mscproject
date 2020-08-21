@@ -1,0 +1,34 @@
+    - name: Non-loopback interface confoguration
+      nxos_interface:
+        name: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        mtu: 9192
+        state: "{{ global_state }}"
+        mode: layer3
+      with_items:
+        - "{{ local_links }}"
+
+    - name: Non-loopback interface L3 configuration
+      nxos_l3_interface:
+        name: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        ipv4: "{{item.link_subnet | ipmath(1) if (is_spine is defined and is_spine == true) else item.link_subnet | ipmath(2) }}/30"
+        state: "{{ global_state }}"
+      with_items:
+        - "{{ local_links }}"
+
+    - name: Non-loopback interface OSPF configuration
+      nxos_interface_ospf:
+        area: 0
+        interface: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        network: point-to-point
+      with_items:
+        - "{{ local_links }}"
+
+    - name: Non-loopback interface PIM configuration
+      nxos_pim_interface:
+        interface: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        sparse: yes
+        state: "{{ global_state }}"
+      with_items:
+        - "{{ local_links }}"

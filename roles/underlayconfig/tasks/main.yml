@@ -1,0 +1,15 @@
+---
+- import_tasks: getvariables.yml
+  tags: always
+- import_tasks: basefunctions.yml
+  tags: base_functions
+- import_tasks: ospfpimvirtual.yaml
+  tags: ospf_pim_virtual
+- import_tasks: configurenve.yml
+  tags: configure_nve
+- import_tasks: bgpvirtual.yml
+  tags: bgp_virtual
+- import_tasks: nonloopback.yml
+  tags: nonloopback
+- import_tasks: createportchannel.yml
+  tags: create_portchannel

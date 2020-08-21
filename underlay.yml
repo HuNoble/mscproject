@@ -1,0 +1,481 @@
+- hosts: underlay
+  gather_facts: false
+  vars:
+    links:
+    - {leaf_node: leaf1, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet1/51, link_subnet: 172.17.4.8}
+    - {leaf_node: leaf2, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet1/52, link_subnet: 172.17.4.4}
+    - {leaf_node: border_leaf1, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet2/52, link_subnet: 172.17.4.16}
+    - {leaf_node: border_leaf2, leaf_interface: Ethernet1/52, spine_node: spine1, spine_interface: Ethernet2/51, link_subnet: 172.17.4.12}
+    - {leaf_node: leaf1, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet1/49, link_subnet: 172.17.4.20}
+    - {leaf_node: leaf2, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet1/50, link_subnet: 172.17.4.24}
+    - {leaf_node: border_leaf1, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet2/50, link_subnet: 172.17.4.28}
+    - {leaf_node: border_leaf2, leaf_interface: Ethernet1/51, spine_node: spine2, spine_interface: Ethernet2/49, link_subnet: 172.17.4.32}
+    addresses:
+      - {node: leaf1, loopback_internal: 172.18.0.3, loopback_vtep: 172.18.1.4}
+      - {node: leaf2, loopback_internal: 172.17.0.4, loopback_vtep: 172.18.1.6}
+      - {node: border_leaf1, loopback_internal: 172.18.0.1, loopback_vtep: 172.18.1.1}
+      - {node: border_leaf2, loopback_internal: 172.18.0.2, loopback_vtep: 172.18.1.3}
+      - {node: spine1, loopback_internal: 172.18.0.5, loopback_rp: 172.18.0.5, is_rp: true}
+      - {node: spine2, loopback_internal: 172.18.0.6, loopback_rp: 172.18.0.5, is_rp: true}
+    portchannels:
+      - {node1: leaf1, ip_address1: 192.168.11.82, interfaces1: [Ethernet1/45, Ethernet1/46],
+         node2: leaf2, ip_address2: 192.168.11.83, interfaces2: [Ethernet1/45, Ethernet1/46],
+         portchannel: 501, vpc_id: 100, vlan_id: 1313, vlan_subnet: 172.17.4.36, loopback_vip: 172.18.1.5}  
+      - {node1: border_leaf1, ip_address1: 192.168.11.80, interfaces1: [Ethernet1/47, Ethernet1/48],
+         node2: border_leaf2, ip_address2: 192.168.11.81, interfaces2: [Ethernet1/47, Ethernet1/48],
+         portchannel: 501, vpc_id: 100, vlan_id: 1313, vlan_subnet: 172.17.4.42, loopback_vip: 172.18.1.2}    
+    rp_anycast_address: 172.18.2.1
+    bgp_asn: 65100
+    rid_agg_network: 172.18.0.0/24
+    fabric_forward_anycast_gateway_mac: "EEEE.EEEE.EEEE"
+    global_state: "present"
+  tasks:
+  #getvariables.yml
+    - name: Init per-host link list
+      set_fact:
+        local_links: []
+      tags: configit
+    
+    - name: Fill per-host link list
+      set_fact:
+        local_links: "{{ local_links + [item] }}"
+        is_leaf: "{{ true if item.leaf_node == inventory_hostname else omit}}"
+        is_spine: "{{ true if item.spine_node == inventory_hostname else omit}}"
+      when: item.leaf_node == inventory_hostname or item.spine_node == inventory_hostname
+      with_items:
+        - "{{ links }}"
+      tags: configit
+
+    - name: Fill per-host address list
+      set_fact:
+        local_addresses: "{{ item }}"
+      when: item.node == inventory_hostname
+      with_items:
+        - "{{ addresses }}"
+    
+    #basefunctions.yml
+    - name: Set NV Overlay EVPN
+      nxos_evpn_global:
+        nv_overlay_evpn: true
+        
+    - name: Activate OSPF feature
+      nxos_feature:
+        feature: ospf
+        state: enabled
+        
+    - name: Activate BGP feature
+      nxos_feature:
+        feature: bgp
+        state: enabled
+        
+    - name: Activate LACP feature
+      nxos_feature:
+        feature: lacp
+        state: enabled
+        
+    - name: Activate NV overlay feature
+      nxos_feature:
+        feature: "nv overlay"
+        state: enabled
+     
+    - name: Activate PIM feature
+      nxos_feature:
+        feature: pim
+        state: enabled
+    
+    - name: Activate interface-vlan feature
+      nxos_feature:
+        feature: interface-vlan
+        state: enabled
+    
+    - name: Activate vnseg_vlan feature
+      nxos_feature:
+        feature: vnseg_vlan
+        state: enabled
+        
+    - name: Activate vpc feature
+      nxos_feature:
+        feature: vpc
+        state: enabled
+        
+    - name: Configure fabric forward anycast gateway MAC address
+      nxos_overlay_global:
+        anycast_gateway_mac: "{{ fabric_forward_anycast_gateway_mac }}"
+        
+    - name: Configure hostname
+      nxos_system:
+        hostname: "{{ inventory_hostname }}"
+        state: "{{ global_state }}"
+    
+    #ospfpimvirtual.yaml        
+    - name: Bring up loopback0 interface as it's needed on all hosts
+      nxos_interface:
+        admin_state: up
+        name: Loopback0
+        state: "{{ global_state }}"
+        
+    - name: Configure loopback0 address
+      nxos_l3_interface:
+        name: loopback0
+        ipv4: "{{local_addresses.loopback_internal }}/32"
+        state: "{{ global_state }}"
+
+    - name: Create OSPF instance
+      nxos_ospf:
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+
+    - name: Set router ID for OSPF instance
+      nxos_ospf_vrf:
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        router_id: "{{ local_addresses.loopback_internal }}"
+
+    - name: Add loopback0 to OSPF
+      nxos_interface_ospf:
+        area: 0
+        interface: loopback0
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        
+    - name: Put loopback0 to PIM sparse mode
+      nxos_pim_interface:
+        interface: loopback0
+        sparse: yes
+        state: "{{ global_state }}"
+        
+    - name: Bring up loopback1 interface on selected spines
+      nxos_interface:
+        admin_state: up
+        name: Loopback1
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+    
+    - name: Configure loopback1 on selected spines
+      nxos_l3_interface:
+        name: loopback1
+        ipv4: "{{ rp_anycast_address }}/32"
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+
+    - name: Add loopback1 to OSPF
+      nxos_interface_ospf:
+        area: 0
+        interface: loopback1
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+
+    - name: Put loopback1 to PIM sparse mode
+      nxos_pim_interface:
+        interface: loopback1
+        sparse: yes
+        state: "{{ global_state }}"
+      when: is_spine is defined and is_spine == true and local_addresses.is_rp == true
+
+    - name: Assign PIM anycast-rp address
+      nxos_config:
+        lines: "ip pim anycast-rp {{ rp_anycast_address }} {{item.loopback_internal}}"
+      when: global_state == "present" and local_addresses.is_rp is defined and local_addresses.is_rp == true and item.is_rp is defined and item.is_rp == true
+      with_items:
+        - "{{ addresses }}"
+
+    - name: Configure PIM rp address
+      nxos_pim_rp_address:
+        rp_address: "{{ rp_anycast_address }}"
+        state: "{{ global_state }}"
+        
+    - name: Bring up loopback2 interface on leaves
+      nxos_interface:
+        admin_state: up
+        name: Loopback2
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+
+    - name: Configure loopback2 address on leaves
+      nxos_l3_interface:
+        name: loopback2
+        ipv4: "{{local_addresses.loopback_vtep }}/32"
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+      
+    - name: Configure secondary IP on loopback2
+      nxos_l3_interface:
+        name: loopback2
+        ipv4: "{{ item.loopback_vip }}/32 secondary"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Put loopback1 to PIM sparse mode
+      nxos_pim_interface:
+        interface: loopback2
+        sparse: yes
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+
+    - name: Add loopback2 to OSPF
+      nxos_interface_ospf:
+        area: 0
+        interface: loopback2
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+
+      #configurenve.yml
+    - name: Configure NVE interface
+      nxos_vxlan_vtep:
+        interface: nve1
+        source_interface: loopback2
+        host_reachability: yes
+        shutdown: yes
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+      
+    - name: NVE advertise virtual rmac
+      nxos_config:
+        parents: interface nve1
+        lines: 
+          - advertise virtual-rmac
+      when: global_state == "present" and is_leaf is defined and is_leaf == true
+      
+    - name: Configure NVE interface
+      nxos_vxlan_vtep:
+        interface: nve1
+        shutdown: no
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true
+    
+    #bgpvirtual.yml
+    - name: Create BGP AS
+      nxos_bgp:
+        asn: "{{ bgp_asn }}"
+        state: "{{ global_state }}"
+        router_id: "{{ local_addresses.loopback_internal }}"
+
+    - name: BGP neighbor configuration (spine)
+      nxos_bgp_neighbor:
+        asn: "{{ bgp_asn }}"
+        update_source: loopback0
+        state: "{{ global_state }}"
+        remote_as: "{{ bgp_asn }}"
+        neighbor: "{{ rid_agg_network }}"
+      when: is_spine is defined and is_spine == true
+
+    - name: BGP neighbor AF configuration (spine)
+      nxos_bgp_neighbor_af:
+        asn: "{{ bgp_asn }}"
+        afi: l2vpn
+        safi: evpn
+        neighbor: "{{ rid_agg_network }}"
+        send_community: both
+        state: "{{ global_state }}"
+        route_reflector_client: yes
+      when: is_spine is defined and is_spine == true
+
+    - name: BGP neighbor configuration (leaf)
+      nxos_bgp_neighbor:
+        asn: "{{ bgp_asn }}"
+        update_source: loopback0
+        state: "{{ global_state }}"
+        remote_as: "{{ bgp_asn }}"
+        neighbor: "{{ item.loopback_internal }}" #spine loopback0
+      when: is_leaf is defined and is_leaf == true and item.node is search("spine")
+      with_items:
+        - "{{ addresses }}"
+
+    - name: BGP neighbor AF configuration (leaf)
+      nxos_bgp_neighbor_af:
+        asn: "{{ bgp_asn }}"
+        afi: l2vpn
+        safi: evpn
+        neighbor: "{{ item.loopback_internal }}"
+        send_community: both
+        state: "{{ global_state }}"
+      when: is_leaf is defined and is_leaf == true and item.node is search("spine")
+      with_items:
+        - "{{ addresses }}"
+    
+    - name: NVE infra-vlans
+      nxos_config:
+        parents: 
+          - "router bgp {{ bgp_asn }}"
+          - address-family l2vpn evpn
+        lines: 
+          - advertise-pip
+      when: global_state == "present" and is_leaf is defined and is_leaf == true
+      tags: configit
+
+      #nonloopback.yml
+    - name: Non-loopback interface confoguration
+      nxos_interface:
+        name: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        mtu: 9192
+        state: "{{ global_state }}"
+        mode: layer3
+      with_items:
+        - "{{ local_links }}"
+
+    - name: Non-loopback interface L3 configuration
+      nxos_l3_interface:
+        name: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        ipv4: "{{item.link_subnet | ipmath(1) if (is_spine is defined and is_spine == true) else item.link_subnet | ipmath(2) }}/30"
+        state: "{{ global_state }}"
+      with_items:
+        - "{{ local_links }}"
+
+    - name: Non-loopback interface OSPF configuration
+      nxos_interface_ospf:
+        area: 0
+        interface: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        network: point-to-point
+      with_items:
+        - "{{ local_links }}"
+
+    - name: Non-loopback interface PIM configuration
+      nxos_pim_interface:
+        interface: "{{item.spine_interface if (is_spine is defined and is_spine == true) else item.leaf_interface}}"
+        sparse: yes
+        state: "{{ global_state }}"
+      with_items:
+        - "{{ local_links }}"
+
+        #createportchannel.yml
+    - name: Bring up interfaces which partkae in portchannels
+      nxos_interface:
+        admin_state: up
+        name: "{{item.interfaces1 if inventory_hostname == item.node1 else item.interfaces2}}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Create link aggregation between leaves
+      nxos_linkagg:
+        group: "{{ item.portchannel }}"
+        state: "{{ global_state }}"
+        mode: active
+        members: "{{item.interfaces1 if inventory_hostname == item.node1 else item.interfaces2}}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+      
+    - name: Create vPC and set global configuration
+      nxos_vpc:
+        domain: "{{item.vpc_id}}"
+        pkl_dest: "{{ item.ip_address2 if inventory_hostname == item.node1 else item.ip_address1 }}"
+        pkl_src: "{{ item.ip_address1 if inventory_hostname == item.node1 else item.ip_address2 }}"
+        peer_gw: true
+        state: "{{ global_state }}"
+        auto_recovery: true
+        delay_restore: 150
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Additional config for vPC domain
+      nxos_config:
+        parents: "vpc domain {{ item.vpc_id }}"
+        lines: 
+          - auto-recovery reload-delay 360
+          - ip arp synchronize
+          - ipv6 nd synchronize
+          - peer-switch
+      when: global_state == "present" and inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Put portchannel interfaces to L2 mode
+      nxos_interface:
+        name: "{{'port-channel' + (item.portchannel|string) }}"
+        mode: layer2
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Put portchannel interfaces to trunk mode
+      nxos_l2_interface:
+        mode: trunk
+        name: "{{'port-channel' + (item.portchannel|string) }}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+
+    - name: Create vPC interface config
+      nxos_vpc_interface:
+        peer_link: yes
+        portchannel: "{{ item.portchannel }}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Create VLAN for interfaces in vPC
+      nxos_vlan:
+        vlan_id: "{{ item.vlan_id }}"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Create interface for backup VLAN
+      nxos_interface:
+        name: Vlan"{{ item.vlan_id }}"
+        mtu: 9216
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: Add no ip redirects to VLAN interface
+      nxos_config:
+        parents: "interface Vlan{{ item.vlan_id }}"
+        lines: 
+          - no ip redirects
+          - no ipv6 redirects
+      when: global_state == "present" and inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: VLAN interface L3 configuration
+      nxos_l3_interface:
+        name: Vlan"{{ item.vlan_id }}"
+        ipv4: "{{item.vlan_subnet | ipmath(1) if inventory_hostname == item.node1 else item.vlan_subnet | ipmath(2) }}/30"
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+
+    - name: VLAN interface OSPF configuration
+      nxos_interface_ospf:
+        area: 0
+        interface: "Vlan{{ item.vlan_id }}"
+        ospf: UNDERLAY
+        state: "{{ global_state }}"
+        network: point-to-point
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+
+    - name: VLAN interface PIM configuration
+      nxos_pim_interface:
+        interface: "Vlan{{ item.vlan_id }}"
+        sparse: yes
+        state: "{{ global_state }}"
+      when: inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        
+    - name: NVE infra-vlans
+      nxos_config:
+        lines: 
+          - "system nve infra-vlans {{ item.vlan_id }}"
+      when: global_state == "present" and inventory_hostname == item.node1 or inventory_hostname == item.node2
+      with_items:
+        - "{{ portchannels }}"
+        

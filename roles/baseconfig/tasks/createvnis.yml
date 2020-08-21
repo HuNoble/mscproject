@@ -1,0 +1,10 @@
+---
+- name: create EVPN VNI-s
+  nxos_evpn_vni:
+    vni: '{{ item.vni }}'
+    route_distinguisher: auto
+    route_target_both: auto
+    state: '{{ global_state }}'
+  when: tenant is defined
+  with_items:
+    - "{{ networks }}"

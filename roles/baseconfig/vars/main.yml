@@ -1,0 +1,33 @@
+---
+global_state: present
+networks:
+  - vni: 30001
+    multicast_group: 239.1.100.1
+    attach:
+      - switch: leaf1
+        vlan_id: 2345
+        vlan_name: Blue
+        interface: 
+          - Ethernet1/3
+        mode: trunk
+        vpc_pair: leaf2
+        vpc_id: 101
+        vpc_interface: 
+          - Ethernet 1/3
+        portchannel: 13
+      - switch: leaf1
+        vlan_id: 2345
+        vlan_name: Blue
+        interface: 
+          - Ethernet1/1
+      - switch: border_leaf1
+        vlan_id: 2345
+        vlan_name: Blue
+        interface: 
+          - Ethernet1/1
+        mode: trunk
+        vpc_pair: border_leaf2
+        vpc_id: 101
+        vpc_interface: 
+          - Ethernet 1/1
+        portchannel: 13
